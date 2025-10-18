@@ -152,23 +152,65 @@ function validateConfig(config: OSSConfig): void {
 /**
  * Create a sample configuration file
  */
-export function createSampleConfig(outputPath: string = '.ossrc.json'): void {
-  const sampleConfig: OSSConfig = {
-    region: 'YOUR_REGION',
-    accessKeyId: 'YOUR_ACCESS_KEY_ID',
-    accessKeySecret: 'YOUR_ACCESS_KEY_SECRET',
-    bucket: 'YOUR_BUCKET_NAME',
-    secure: true,
-    timeout: 60000,
-  };
-
+export function createSampleConfig(outputPath: string = '.ossrc.json', type?: string): void {
   const absolutePath = path.resolve(outputPath);
 
   if (fs.existsSync(absolutePath)) {
     throw new Error(chalk.red(`Config file already exists: ${absolutePath}`));
   }
 
-  fs.writeFileSync(absolutePath, JSON.stringify(sampleConfig, null, 2), 'utf-8');
+  // Determine file type from extension or explicit type option
+  const ext = path.extname(absolutePath);
+  const fileType = type || (ext === '.js' ? 'js' : 'json');
+
+  let content: string;
+
+  if (fileType === 'js') {
+    // Generate JavaScript config with environment variable support
+    content = `// OSS Uploader Configuration
+// You can use environment variables or hardcoded values
+
+export default {
+  // Required fields
+  region: process.env.OSS_REGION || 'YOUR_REGION',
+  accessKeyId: process.env.OSS_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY_ID',
+  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || 'YOUR_ACCESS_KEY_SECRET',
+  bucket: process.env.OSS_BUCKET || 'YOUR_BUCKET_NAME',
+
+  // Optional fields
+  // endpoint: process.env.OSS_ENDPOINT,
+  // internal: process.env.OSS_INTERNAL === 'true',
+  secure: true,
+  timeout: 60000,
+};
+`;
+  } else {
+    // Generate JSON config
+    const sampleConfig: OSSConfig = {
+      region: 'YOUR_REGION',
+      accessKeyId: 'YOUR_ACCESS_KEY_ID',
+      accessKeySecret: 'YOUR_ACCESS_KEY_SECRET',
+      bucket: 'YOUR_BUCKET_NAME',
+      secure: true,
+      timeout: 60000,
+    };
+    content = JSON.stringify(sampleConfig, null, 2);
+  }
+
+  fs.writeFileSync(absolutePath, content, 'utf-8');
   console.log(chalk.green(`✓ Sample configuration created: ${absolutePath}`));
-  console.log(chalk.yellow('Please update the configuration with your actual credentials.'));
+
+  if (fileType === 'js') {
+    console.log(
+      chalk.cyan('💡 JavaScript config supports environment variables with fallback values.')
+    );
+    console.log(chalk.yellow('Please set environment variables or update the fallback values.'));
+  } else {
+    console.log(chalk.yellow('Please update the configuration with your actual credentials.'));
+    console.log(
+      chalk.cyan(
+        '💡 Tip: Use `oss-uploader init -o oss.config.js` to generate a JS config that supports environment variables.'
+      )
+    );
+  }
 }

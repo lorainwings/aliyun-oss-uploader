@@ -158,9 +158,13 @@ program
   .command('init')
   .description('Create a sample configuration file')
   .option('-o, --output <path>', 'Output path for configuration file', '.ossrc.json')
+  .option(
+    '-t, --type <type>',
+    'Configuration file type: json or js (default: auto-detect from output path)'
+  )
   .action((options: any) => {
     try {
-      createSampleConfig(options.output);
+      createSampleConfig(options.output, options.type);
     } catch (error: any) {
       console.error(chalk.red(`\n❌ Error: ${error.message}`));
       process.exit(1);

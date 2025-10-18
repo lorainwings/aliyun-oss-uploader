@@ -54,17 +54,36 @@ yarn global add @atomfe/oss-uploader
 
 ## 🚀 快速开始
 
+### 方式 1：JSON 配置
+
 ```bash
-# 1. 初始化配置
+# 1. 初始化配置（JSON 格式）
 oss-uploader init
 
 # 2. 编辑 .ossrc.json 填入你的凭证
 {
   "region": "YOUR_REGION",
-  "accessKeyId": "你的_ACCESS_KEY_ID",
-  "accessKeySecret": "你的_ACCESS_KEY_SECRET",
-  "bucket": "你的_BUCKET_NAME"
+  "accessKeyId": "YOUR_ACCESS_KEY_ID",
+  "accessKeySecret": "YOUR_ACCESS_KEY_SECRET",
+  "bucket": "YOUR_BUCKET_NAME"
 }
+
+# 3. 上传文件
+oss-uploader upload ./file.txt
+oss-uploader upload ./dist -t static/
+```
+
+### 方式 2：JavaScript 配置（推荐）
+
+```bash
+# 1. 初始化 JavaScript 配置
+oss-uploader init -o oss.config.js
+
+# 2. 设置环境变量或编辑 oss.config.js
+export OSS_REGION="oss-cn-hangzhou"
+export OSS_ACCESS_KEY_ID="your-access-key-id"
+export OSS_ACCESS_KEY_SECRET="your-access-key-secret"
+export OSS_BUCKET="your-bucket-name"
 
 # 3. 上传文件
 oss-uploader upload ./file.txt
@@ -89,7 +108,11 @@ oss-uploader delete <path>
 oss-uploader info
 
 # 创建示例配置
-oss-uploader init
+oss-uploader init [选项]
+
+# init 命令选项：
+#   -o, --output <path>  配置文件输出路径（默认：.ossrc.json）
+#   -t, --type <type>    配置文件类型：json 或 js
 ```
 
 ### 上传选项
@@ -206,22 +229,30 @@ oss-uploader upload ./dist --no-mapping
 ```json
 {
   "region": "YOUR_REGION",
-  "accessKeyId": "你的_ACCESS_KEY_ID",
-  "accessKeySecret": "你的_ACCESS_KEY_SECRET",
+  "accessKeyId": "YOUR_ACCESS_KEY_ID",
+  "accessKeySecret": "YOUR_ACCESS_KEY_SECRET",
   "bucket": "my-bucket"
 }
 ```
 
 ### 示例：`oss.config.js`
 
-**ESM 格式：**
+使用 `oss-uploader init -o oss.config.js` 生成 JavaScript 配置
+
+**ESM 格式（带后备值）：**
 
 ```javascript
 export default {
-  region: process.env.OSS_REGION,
-  accessKeyId: process.env.OSS_ACCESS_KEY_ID,
-  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
-  bucket: process.env.OSS_BUCKET || 'my-bucket',
+  region: process.env.OSS_REGION || 'YOUR_REGION',
+  accessKeyId: process.env.OSS_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY_ID',
+  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || 'YOUR_ACCESS_KEY_SECRET',
+  bucket: process.env.OSS_BUCKET || 'YOUR_BUCKET_NAME',
+  
+  // 可选字段
+  // endpoint: process.env.OSS_ENDPOINT,
+  // internal: process.env.OSS_INTERNAL === 'true',
+  secure: true,
+  timeout: 60000,
 };
 ```
 
@@ -229,10 +260,12 @@ export default {
 
 ```javascript
 module.exports = {
-  region: process.env.OSS_REGION,
-  accessKeyId: process.env.OSS_ACCESS_KEY_ID,
-  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
-  bucket: process.env.OSS_BUCKET || 'my-bucket',
+  region: process.env.OSS_REGION || 'YOUR_REGION',
+  accessKeyId: process.env.OSS_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY_ID',
+  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || 'YOUR_ACCESS_KEY_SECRET',
+  bucket: process.env.OSS_BUCKET || 'YOUR_BUCKET_NAME',
+  secure: true,
+  timeout: 60000,
 };
 ```
 

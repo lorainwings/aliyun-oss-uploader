@@ -283,6 +283,49 @@ describe('config', () => {
       expect(config.region).toBe('YOUR_REGION');
     });
 
+    it('should create JavaScript config file', () => {
+      const jsConfigPath = path.join(process.cwd(), 'oss.config-test.js');
+
+      try {
+        createSampleConfig(jsConfigPath);
+
+        expect(fs.existsSync(jsConfigPath)).toBe(true);
+
+        const content = fs.readFileSync(jsConfigPath, 'utf-8');
+
+        expect(content).toContain('export default');
+        expect(content).toContain('process.env.OSS_REGION');
+        expect(content).toContain('process.env.OSS_ACCESS_KEY_ID');
+        expect(content).toContain('process.env.OSS_ACCESS_KEY_SECRET');
+        expect(content).toContain('process.env.OSS_BUCKET');
+      } finally {
+        // Cleanup
+        if (fs.existsSync(jsConfigPath)) {
+          fs.unlinkSync(jsConfigPath);
+        }
+      }
+    });
+
+    it('should create JS config when type is explicitly set to js', () => {
+      const jsonPath = path.join(process.cwd(), 'config-test.json');
+
+      try {
+        createSampleConfig(jsonPath, 'js');
+
+        expect(fs.existsSync(jsonPath)).toBe(true);
+
+        const content = fs.readFileSync(jsonPath, 'utf-8');
+
+        expect(content).toContain('export default');
+        expect(content).toContain('process.env.OSS_REGION');
+      } finally {
+        // Cleanup
+        if (fs.existsSync(jsonPath)) {
+          fs.unlinkSync(jsonPath);
+        }
+      }
+    });
+
     it('should throw error when config file already exists', () => {
       // Create a dummy file
       fs.writeFileSync(testConfigPath, '{}');

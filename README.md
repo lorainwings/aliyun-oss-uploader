@@ -54,8 +54,10 @@ yarn global add @atomfe/oss-uploader
 
 ## 🚀 Quick Start
 
+### Option 1: JSON Configuration
+
 ```bash
-# 1. Initialize configuration
+# 1. Initialize configuration (JSON)
 oss-uploader init
 
 # 2. Edit .ossrc.json with your credentials
@@ -65,6 +67,23 @@ oss-uploader init
   "accessKeySecret": "YOUR_ACCESS_KEY_SECRET",
   "bucket": "YOUR_BUCKET_NAME"
 }
+
+# 3. Upload files
+oss-uploader upload ./file.txt
+oss-uploader upload ./dist -t static/
+```
+
+### Option 2: JavaScript Configuration (Recommended)
+
+```bash
+# 1. Initialize JavaScript configuration
+oss-uploader init -o oss.config.js
+
+# 2. Set environment variables or edit oss.config.js
+export OSS_REGION="oss-cn-hangzhou"
+export OSS_ACCESS_KEY_ID="your-access-key-id"
+export OSS_ACCESS_KEY_SECRET="your-access-key-secret"
+export OSS_BUCKET="your-bucket-name"
 
 # 3. Upload files
 oss-uploader upload ./file.txt
@@ -89,7 +108,11 @@ oss-uploader delete <path>
 oss-uploader info
 
 # Create sample configuration
-oss-uploader init
+oss-uploader init [options]
+
+# Options for init command:
+#   -o, --output <path>  Output path for configuration file (default: .ossrc.json)
+#   -t, --type <type>    Configuration file type: json or js
 ```
 
 ### Upload Options
@@ -214,14 +237,22 @@ The tool supports multiple configuration sources:
 
 ### Example: `oss.config.js`
 
-**ESM format:**
+Generate JavaScript config with `oss-uploader init -o oss.config.js`
+
+**ESM format (with fallback values):**
 
 ```javascript
 export default {
-  region: process.env.OSS_REGION,
-  accessKeyId: process.env.OSS_ACCESS_KEY_ID,
-  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
-  bucket: process.env.OSS_BUCKET,
+  region: process.env.OSS_REGION || 'YOUR_REGION',
+  accessKeyId: process.env.OSS_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY_ID',
+  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || 'YOUR_ACCESS_KEY_SECRET',
+  bucket: process.env.OSS_BUCKET || 'YOUR_BUCKET_NAME',
+  
+  // Optional fields
+  // endpoint: process.env.OSS_ENDPOINT,
+  // internal: process.env.OSS_INTERNAL === 'true',
+  secure: true,
+  timeout: 60000,
 };
 ```
 
@@ -229,10 +260,12 @@ export default {
 
 ```javascript
 module.exports = {
-  region: process.env.OSS_REGION,
-  accessKeyId: process.env.OSS_ACCESS_KEY_ID,
-  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
-  bucket: process.env.OSS_BUCKET,
+  region: process.env.OSS_REGION || 'YOUR_REGION',
+  accessKeyId: process.env.OSS_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY_ID',
+  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || 'YOUR_ACCESS_KEY_SECRET',
+  bucket: process.env.OSS_BUCKET || 'YOUR_BUCKET_NAME',
+  secure: true,
+  timeout: 60000,
 };
 ```
 
