@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -46,7 +47,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Build
         run: pnpm run build
