@@ -55,12 +55,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lorainwings/oss-uploader.git"
+    "url": "git+https://github.com/lorainwings/aliyun-oss-uploader.git"
   },
   "bugs": {
-    "url": "https://github.com/lorainwings/oss-uploader/issues"
+    "url": "https://github.com/lorainwings/aliyun-oss-uploader/issues"
   },
-  "homepage": "https://github.com/lorainwings/oss-uploader#readme",
+  "homepage": "https://github.com/lorainwings/aliyun-oss-uploader#readme",
   "packageManager": "pnpm@10.18.2",
   "files": [
     "dist",
