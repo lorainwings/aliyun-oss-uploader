@@ -9,6 +9,7 @@ vi.mock('chalk', () => ({
     red: (str: string) => str,
     green: (str: string) => str,
     yellow: (str: string) => str,
+    cyan: (str: string) => str,
   },
 }));
 
@@ -69,7 +70,151 @@ describe('config', () => {
     });
 
     it('should throw error when no config found automatically', async () => {
-      await expect(loadConfig()).rejects.toThrow('No configuration found');
+      // Save current directory and change to testConfigDir to ensure no config files exist
+      const originalCwd = process.cwd();
+      process.chdir(testConfigDir);
+
+      try {
+        await expect(loadConfig()).rejects.toThrow('No configuration found');
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+
+    it('should load config from environment variables', async () => {
+      // Save current directory and change to testConfigDir to avoid picking up existing config files
+      const originalCwd = process.cwd();
+      process.chdir(testConfigDir);
+
+      // Set environment variables
+      process.env.OSS_REGION = 'oss-cn-beijing';
+      process.env.OSS_ACCESS_KEY_ID = 'env-key-id';
+      process.env.OSS_ACCESS_KEY_SECRET = 'env-key-secret';
+      process.env.OSS_BUCKET = 'env-bucket';
+
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      try {
+        const config = await loadConfig();
+
+        expect(config).toMatchObject({
+          region: 'oss-cn-beijing',
+          accessKeyId: 'env-key-id',
+          accessKeySecret: 'env-key-secret',
+          bucket: 'env-bucket',
+        });
+
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Using configuration from environment variables')
+        );
+      } finally {
+        // Cleanup
+        delete process.env.OSS_REGION;
+        delete process.env.OSS_ACCESS_KEY_ID;
+        delete process.env.OSS_ACCESS_KEY_SECRET;
+        delete process.env.OSS_BUCKET;
+        consoleLogSpy.mockRestore();
+        process.chdir(originalCwd);
+      }
+    });
+
+    it('should load optional config from environment variables', async () => {
+      // Save current directory and change to testConfigDir to avoid picking up existing config files
+      const originalCwd = process.cwd();
+      process.chdir(testConfigDir);
+
+      // Set all environment variables including optional ones
+      process.env.OSS_REGION = 'oss-cn-beijing';
+      process.env.OSS_ACCESS_KEY_ID = 'env-key-id';
+      process.env.OSS_ACCESS_KEY_SECRET = 'env-key-secret';
+      process.env.OSS_BUCKET = 'env-bucket';
+      process.env.OSS_ENDPOINT = 'custom-endpoint.com';
+      process.env.OSS_INTERNAL = 'true';
+      process.env.OSS_SECURE = 'false';
+      process.env.OSS_TIMEOUT = '30000';
+
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      try {
+        const config = await loadConfig();
+
+        expect(config).toMatchObject({
+          region: 'oss-cn-beijing',
+          accessKeyId: 'env-key-id',
+          accessKeySecret: 'env-key-secret',
+          bucket: 'env-bucket',
+          endpoint: 'custom-endpoint.com',
+          internal: true,
+          secure: false,
+          timeout: 30000,
+        });
+      } finally {
+        // Cleanup
+        delete process.env.OSS_REGION;
+        delete process.env.OSS_ACCESS_KEY_ID;
+        delete process.env.OSS_ACCESS_KEY_SECRET;
+        delete process.env.OSS_BUCKET;
+        delete process.env.OSS_ENDPOINT;
+        delete process.env.OSS_INTERNAL;
+        delete process.env.OSS_SECURE;
+        delete process.env.OSS_TIMEOUT;
+        consoleLogSpy.mockRestore();
+        process.chdir(originalCwd);
+      }
+    });
+
+    it('should use config file when both file and environment variables exist', async () => {
+      const configPath = path.join(testConfigDir, '.ossrc.json');
+      const fileConfig = {
+        region: 'oss-cn-hangzhou',
+        accessKeyId: 'file-key-id',
+        accessKeySecret: 'file-key-secret',
+        bucket: 'file-bucket',
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(fileConfig));
+
+      // Set env vars (should be ignored when config file exists)
+      process.env.OSS_REGION = 'oss-cn-beijing';
+      process.env.OSS_BUCKET = 'env-bucket';
+      process.env.OSS_ACCESS_KEY_ID = 'env-key-id';
+      process.env.OSS_ACCESS_KEY_SECRET = 'env-key-secret';
+
+      try {
+        const config = await loadConfig(configPath);
+
+        // Config file should be used, not environment variables
+        expect(config.region).toBe('oss-cn-hangzhou');
+        expect(config.bucket).toBe('file-bucket');
+        expect(config.accessKeyId).toBe('file-key-id');
+        expect(config.accessKeySecret).toBe('file-key-secret');
+      } finally {
+        // Cleanup
+        delete process.env.OSS_REGION;
+        delete process.env.OSS_BUCKET;
+        delete process.env.OSS_ACCESS_KEY_ID;
+        delete process.env.OSS_ACCESS_KEY_SECRET;
+      }
+    });
+
+    it('should throw error when environment variables are incomplete', async () => {
+      // Save current directory and change to testConfigDir to avoid picking up existing config files
+      const originalCwd = process.cwd();
+      process.chdir(testConfigDir);
+
+      // Set only partial env vars (missing required fields)
+      process.env.OSS_REGION = 'oss-cn-beijing';
+      process.env.OSS_BUCKET = 'env-bucket';
+      // Missing: OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET
+
+      try {
+        await expect(loadConfig()).rejects.toThrow('Missing required configuration fields');
+      } finally {
+        // Cleanup
+        delete process.env.OSS_REGION;
+        delete process.env.OSS_BUCKET;
+        process.chdir(originalCwd);
+      }
     });
 
     it('should warn for non-standard region format', async () => {

@@ -164,12 +164,29 @@ oss-uploader upload ./dist --no-mapping
 
 ## ⚙️ 配置
 
-工具会按以下顺序搜索配置文件：
+工具支持多种配置来源：
 
-1. `.ossrc` / `.ossrc.json`
-2. `.ossrc.yaml` / `.ossrc.yml`
-3. `oss.config.js` / `oss.config.json`
-4. `package.json` 中的 `oss` 字段
+**优先级顺序：** 优先使用配置文件，无配置文件时使用环境变量
+
+> **注意：** 如果存在配置文件，将优先使用配置文件。只有在找不到配置文件时才会使用环境变量。
+
+### 配置来源
+
+1. **配置文件**（按以下顺序搜索）：
+   - `.ossrc` / `.ossrc.json`
+   - `.ossrc.yaml` / `.ossrc.yml`
+   - `oss.config.js` / `oss.config.json`
+   - `package.json` 中的 `oss` 字段
+
+2. **环境变量**：
+   - `OSS_REGION`
+   - `OSS_ACCESS_KEY_ID`
+   - `OSS_ACCESS_KEY_SECRET`
+   - `OSS_BUCKET`
+   - `OSS_ENDPOINT`（可选）
+   - `OSS_INTERNAL`（可选，`true`/`false`）
+   - `OSS_SECURE`（可选，`true`/`false`）
+   - `OSS_TIMEOUT`（可选，单位毫秒）
 
 ### 配置字段
 
@@ -198,6 +215,7 @@ oss-uploader upload ./dist --no-mapping
 ### 示例：`oss.config.js`
 
 **ESM 格式：**
+
 ```javascript
 export default {
   region: process.env.OSS_REGION || 'oss-cn-hangzhou',
@@ -208,6 +226,7 @@ export default {
 ```
 
 **CommonJS 格式：**
+
 ```javascript
 module.exports = {
   region: process.env.OSS_REGION || 'oss-cn-hangzhou',
@@ -215,6 +234,25 @@ module.exports = {
   accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
   bucket: process.env.OSS_BUCKET || 'my-bucket',
 };
+```
+
+### 示例：仅使用环境变量
+
+```bash
+# 设置环境变量
+export OSS_REGION="oss-cn-hangzhou"
+export OSS_ACCESS_KEY_ID="你的-access-key-id"
+export OSS_ACCESS_KEY_SECRET="你的-access-key-secret"
+export OSS_BUCKET="my-bucket"
+
+# 可选的环境变量
+export OSS_SECURE="true"
+export OSS_TIMEOUT="60000"
+
+# 现在可以不使用配置文件直接使用 CLI
+oss-uploader upload ./dist -t static/
+
+# 注意：如果存在配置文件，将优先使用配置文件而不是环境变量
 ```
 
 ## 🔧 编程使用
@@ -273,10 +311,22 @@ oss-uploader upload ./dist -t static/my-app/
 ### CI/CD 集成
 
 ```yaml
-# GitHub Actions
+# GitHub Actions - 使用环境变量（推荐）
+- name: 上传到 OSS
+  env:
+    OSS_REGION: ${{ secrets.OSS_REGION }}
+    OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+    OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+    OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+  run: |
+    npm install -g oss-uploader
+    oss-uploader upload ./dist -t static/
+
+# 备选方案：使用配置文件
 - name: 上传到 OSS
   run: |
     npm install -g oss-uploader
+    echo '{"region":"${{ secrets.OSS_REGION }}","accessKeyId":"${{ secrets.OSS_ACCESS_KEY_ID }}","accessKeySecret":"${{ secrets.OSS_ACCESS_KEY_SECRET }}","bucket":"${{ secrets.OSS_BUCKET }}"}' > .ossrc.json
     oss-uploader upload ./dist -t static/
 ```
 

@@ -164,12 +164,29 @@ After each upload, the tool automatically generates a `.oss-uploader-mapping.jso
 
 ## ⚙️ Configuration
 
-The tool searches for configuration files in the following order:
+The tool supports multiple configuration sources:
 
-1. `.ossrc` / `.ossrc.json`
-2. `.ossrc.yaml` / `.ossrc.yml`
-3. `oss.config.js` / `oss.config.json`
-4. `oss` field in `package.json`
+**Priority Order:** Config file first, fallback to Environment variables
+
+> **Note:** If a config file exists, it will be used exclusively. Environment variables are only used when no config file is found.
+
+### Configuration Sources
+
+1. **Config Files** (searched in order):
+   - `.ossrc` / `.ossrc.json`
+   - `.ossrc.yaml` / `.ossrc.yml`
+   - `oss.config.js` / `oss.config.json`
+   - `oss` field in `package.json`
+
+2. **Environment Variables**:
+   - `OSS_REGION`
+   - `OSS_ACCESS_KEY_ID`
+   - `OSS_ACCESS_KEY_SECRET`
+   - `OSS_BUCKET`
+   - `OSS_ENDPOINT` (optional)
+   - `OSS_INTERNAL` (optional, `true`/`false`)
+   - `OSS_SECURE` (optional, `true`/`false`)
+   - `OSS_TIMEOUT` (optional, in milliseconds)
 
 ### Configuration Fields
 
@@ -217,6 +234,25 @@ module.exports = {
   accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
   bucket: process.env.OSS_BUCKET || 'my-bucket',
 };
+```
+
+### Example: Using Environment Variables Only
+
+```bash
+# Set environment variables
+export OSS_REGION="oss-cn-hangzhou"
+export OSS_ACCESS_KEY_ID="your-access-key-id"
+export OSS_ACCESS_KEY_SECRET="your-access-key-secret"
+export OSS_BUCKET="my-bucket"
+
+# Optional environment variables
+export OSS_SECURE="true"
+export OSS_TIMEOUT="60000"
+
+# Now you can use the CLI without a config file
+oss-uploader upload ./dist -t static/
+
+# Note: If a config file exists, it will be used instead of environment variables
 ```
 
 ## 🔧 Programmatic Usage
@@ -275,10 +311,22 @@ oss-uploader upload ./dist -t static/my-app/
 ### CI/CD Integration
 
 ```yaml
-# GitHub Actions
+# GitHub Actions - Using environment variables (recommended)
+- name: Upload to OSS
+  env:
+    OSS_REGION: ${{ secrets.OSS_REGION }}
+    OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+    OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+    OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+  run: |
+    npm install -g oss-uploader
+    oss-uploader upload ./dist -t static/
+
+# Alternative: Using config file
 - name: Upload to OSS
   run: |
     npm install -g oss-uploader
+    echo '{"region":"${{ secrets.OSS_REGION }}","accessKeyId":"${{ secrets.OSS_ACCESS_KEY_ID }}","accessKeySecret":"${{ secrets.OSS_ACCESS_KEY_SECRET }}","bucket":"${{ secrets.OSS_BUCKET }}"}' > .ossrc.json
     oss-uploader upload ./dist -t static/
 ```
 

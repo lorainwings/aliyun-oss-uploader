@@ -8,11 +8,46 @@ import { pathToFileURL } from 'url';
 const CONFIG_MODULE_NAME = 'oss';
 
 /**
+ * Load OSS configuration from environment variables
+ */
+function loadConfigFromEnv(): Partial<OSSConfig> | null {
+  const {
+    OSS_REGION,
+    OSS_ACCESS_KEY_ID,
+    OSS_ACCESS_KEY_SECRET,
+    OSS_BUCKET,
+    OSS_ENDPOINT,
+    OSS_INTERNAL,
+    OSS_SECURE,
+    OSS_TIMEOUT,
+  } = process.env;
+
+  // Check if at least one env var is set
+  if (!OSS_REGION && !OSS_ACCESS_KEY_ID && !OSS_ACCESS_KEY_SECRET && !OSS_BUCKET) {
+    return null;
+  }
+
+  const config: Partial<OSSConfig> = {};
+
+  if (OSS_REGION) config.region = OSS_REGION;
+  if (OSS_ACCESS_KEY_ID) config.accessKeyId = OSS_ACCESS_KEY_ID;
+  if (OSS_ACCESS_KEY_SECRET) config.accessKeySecret = OSS_ACCESS_KEY_SECRET;
+  if (OSS_BUCKET) config.bucket = OSS_BUCKET;
+  if (OSS_ENDPOINT) config.endpoint = OSS_ENDPOINT;
+  if (OSS_INTERNAL !== undefined) config.internal = OSS_INTERNAL === 'true';
+  if (OSS_SECURE !== undefined) config.secure = OSS_SECURE === 'true';
+  if (OSS_TIMEOUT) config.timeout = parseInt(OSS_TIMEOUT, 10);
+
+  return config;
+}
+
+/**
  * Load OSS configuration from various sources
+ * Priority: Config file first, fallback to Environment variables
  * Supports: .ossrc, .ossrc.json, .ossrc.yaml, .ossrc.yml, oss.config.js, package.json
  */
 export async function loadConfig(configPath?: string): Promise<OSSConfig> {
-  let config: OSSConfig | null = null;
+  let config: Partial<OSSConfig> | null = null;
 
   // If config path is explicitly provided
   if (configPath) {
@@ -59,16 +94,27 @@ export async function loadConfig(configPath?: string): Promise<OSSConfig> {
     }
   }
 
+  // If no config file found, try loading from environment variables
+  if (!config) {
+    const envConfig = loadConfigFromEnv();
+    if (envConfig) {
+      config = envConfig;
+      console.log(chalk.cyan('ℹ Using configuration from environment variables'));
+    }
+  }
+
   if (!config) {
     throw new Error(
-      chalk.red('No configuration found. Please create a .ossrc.json or specify config path.')
+      chalk.red(
+        'No configuration found. Please create a .ossrc.json, specify config path, or set environment variables (OSS_REGION, OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_BUCKET).'
+      )
     );
   }
 
   // Validate required fields
-  validateConfig(config);
+  validateConfig(config as OSSConfig);
 
-  return config;
+  return config as OSSConfig;
 }
 
 /**

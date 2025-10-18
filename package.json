@@ -1,5 +1,5 @@
 {
-  "name": "oss-uploader",
+  "name": "@atomfe/oss-uploader",
   "version": "1.0.0",
   "description": "A powerful OSS uploader for uploading files to Aliyun OSS",
   "main": "./dist/index.cjs",
@@ -66,7 +66,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "env.example"
   ],
   "dependencies": {
     "ali-oss": "^6.21.0",

@@ -50,3 +50,5 @@ test-configs/
 
 # Upload mapping files
 .oss-uploader-mapping*.json
+yalc.*
+.yalc/**/*
