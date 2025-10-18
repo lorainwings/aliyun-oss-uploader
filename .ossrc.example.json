@@ -1,0 +1,9 @@
+{
+  "region": "oss-cn-hangzhou",
+  "accessKeyId": "YOUR_ACCESS_KEY_ID",
+  "accessKeySecret": "YOUR_ACCESS_KEY_SECRET",
+  "bucket": "YOUR_BUCKET_NAME",
+  "secure": true,
+  "timeout": 60000
+}
+

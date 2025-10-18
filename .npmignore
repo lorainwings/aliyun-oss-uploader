@@ -1,0 +1,37 @@
+# Source files
+src/
+tsconfig.json
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests
+tests/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Config examples
+.ossrc.example.json
+
+# Documentation
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Other
+*.log
+.DS_Store
+node_modules/
+
