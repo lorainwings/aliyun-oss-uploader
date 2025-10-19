@@ -34,12 +34,20 @@ export class OSSUploader {
 
   /**
    * Generate OSS URL for a given path
+   * Properly encodes URL path segments including Chinese characters
    */
   private generateUrl(ossPath: string): string {
     const secure = this.config.secure !== false;
     const protocol = secure ? 'https' : 'http';
     const endpoint = this.config.endpoint || `${this.config.region}.aliyuncs.com`;
-    return `${protocol}://${this.config.bucket}.${endpoint}/${ossPath}`;
+
+    // Encode each path segment separately to preserve '/' separators
+    const encodedPath = ossPath
+      .split('/')
+      .map(segment => encodeURIComponent(segment))
+      .join('/');
+
+    return `${protocol}://${this.config.bucket}.${endpoint}/${encodedPath}`;
   }
 
   /**
@@ -373,22 +381,28 @@ export class OSSUploader {
       return;
     }
 
+    const now = new Date();
     const mappings: UploadMapping[] = successfulResults.map(result => ({
       localPath: result.localPath,
       remotePath: result.remotePath,
       url: result.url!,
       size: result.size || 0,
-      uploadTime: new Date().toISOString(),
+      sizeFormatted: this.formatBytes(result.size || 0),
+      uploadTime: now.toISOString(),
+      uploadTimeLocal: this.formatLocalTime(now),
     }));
 
     const mappingPath = customPath || path.join(process.cwd(), '.oss-uploader-mapping.json');
 
+    const totalSize = mappings.reduce((sum, m) => sum + m.size, 0);
     const mappingData = {
-      uploadTime: new Date().toISOString(),
+      uploadTime: now.toISOString(),
+      uploadTimeLocal: this.formatLocalTime(now),
       bucket: this.config.bucket,
       region: this.config.region,
       totalFiles: mappings.length,
-      totalSize: mappings.reduce((sum, m) => sum + m.size, 0),
+      totalSize,
+      totalSizeFormatted: this.formatBytes(totalSize),
       files: mappings,
     };
 
@@ -436,6 +450,21 @@ export class OSSUploader {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  /**
+   * Format date to local time string
+   * Returns a readable local time format: YYYY-MM-DD HH:mm:ss
+   */
+  private formatLocalTime(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
 
   /**

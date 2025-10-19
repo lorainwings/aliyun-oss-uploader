@@ -178,6 +178,28 @@ describe('OSSUploader', () => {
       });
     });
 
+    describe('formatLocalTime', () => {
+      it('should format date to local time string', () => {
+        const date = new Date('2025-10-19T06:08:44.181Z');
+        const formatted = uploaderAny.formatLocalTime(date);
+        expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+      });
+
+      it('should pad single digit values', () => {
+        const date = new Date(2025, 0, 5, 8, 3, 7); // Jan 5, 2025 08:03:07
+        const formatted = uploaderAny.formatLocalTime(date);
+        expect(formatted).toBe('2025-01-05 08:03:07');
+      });
+
+      it('should format current date correctly', () => {
+        const now = new Date();
+        const formatted = uploaderAny.formatLocalTime(now);
+        expect(formatted).toContain(now.getFullYear().toString());
+        expect(formatted).toContain('-');
+        expect(formatted).toContain(':');
+      });
+    });
+
     describe('normalizePath', () => {
       it('should convert backslashes to forward slashes', () => {
         expect(uploaderAny.normalizePath('path\\to\\file.txt')).toBe('path/to/file.txt');
@@ -240,6 +262,32 @@ describe('OSSUploader', () => {
       it('should use region endpoint by default', () => {
         const url = uploaderAny.generateUrl('test/file.txt');
         expect(url).toContain('oss-cn-hangzhou.aliyuncs.com');
+      });
+
+      it('should properly encode Chinese characters in path', () => {
+        const url = uploaderAny.generateUrl('测试/文件.txt');
+        expect(url).toContain('%E6%B5%8B%E8%AF%95'); // Encoded "测试"
+        expect(url).toContain('%E6%96%87%E4%BB%B6.txt'); // Encoded "文件.txt"
+        expect(url).toContain('/'); // Should preserve path separators
+      });
+
+      it('should properly encode special characters', () => {
+        const url = uploaderAny.generateUrl('path/file name with spaces.txt');
+        expect(url).toContain('file%20name%20with%20spaces.txt');
+        expect(url).not.toContain(' '); // No unencoded spaces
+      });
+
+      it('should handle mixed Chinese and English paths', () => {
+        const url = uploaderAny.generateUrl('static/图片/logo.png');
+        expect(url).toContain('static/'); // English part preserved
+        expect(url).toContain('%E5%9B%BE%E7%89%87'); // Encoded "图片"
+        expect(url).toContain('logo.png'); // English filename preserved
+      });
+
+      it('should encode special characters like #, ?, &', () => {
+        const url = uploaderAny.generateUrl('path/file#1.txt');
+        expect(url).toContain('file%231.txt'); // # should be encoded
+        expect(url).not.toContain('#');
       });
     });
 

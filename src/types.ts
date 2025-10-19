@@ -60,5 +60,7 @@ export interface UploadMapping {
   remotePath: string;
   url: string;
   size: number;
+  sizeFormatted: string;
   uploadTime: string;
+  uploadTimeLocal: string;
 }

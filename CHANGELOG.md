@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+### Patch Changes
+
+- add localtime and size format
+
 ## 1.1.0
 
 ### Minor Changes
