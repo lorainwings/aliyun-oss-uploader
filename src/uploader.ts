@@ -4,7 +4,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora, { type Ora } from 'ora';
+import cliProgress from 'cli-progress';
+
+// Constants
+const MAX_FILENAME_DISPLAY_LENGTH = 40;
+const DEFAULT_TIMEOUT = 60000;
 
 /**
  * OSS Uploader class
@@ -23,7 +28,7 @@ export class OSSUploader {
       endpoint: config.endpoint,
       internal: config.internal,
       secure: config.secure !== false, // Default to true
-      timeout: config.timeout || 60000,
+      timeout: config.timeout || DEFAULT_TIMEOUT,
     });
   }
 
@@ -35,6 +40,84 @@ export class OSSUploader {
     const protocol = secure ? 'https' : 'http';
     const endpoint = this.config.endpoint || `${this.config.region}.aliyuncs.com`;
     return `${protocol}://${this.config.bucket}.${endpoint}/${ossPath}`;
+  }
+
+  /**
+   * Normalize path to use forward slashes
+   */
+  private normalizePath(filePath: string): string {
+    return filePath.replace(/\\/g, '/');
+  }
+
+  /**
+   * Truncate filename for display
+   */
+  private truncateFilename(filename: string): string {
+    if (filename.length <= MAX_FILENAME_DISPLAY_LENGTH) {
+      return filename;
+    }
+    return '...' + filename.slice(-(MAX_FILENAME_DISPLAY_LENGTH - 3));
+  }
+
+  /**
+   * Check if file exists in OSS
+   * @returns true if exists, false if not exists
+   * @throws Error if check fails for other reasons
+   */
+  private async fileExistsInOSS(remotePath: string): Promise<boolean> {
+    try {
+      await this.client.head(remotePath);
+      return true;
+    } catch (error: any) {
+      if (error.code === 'NoSuchKey') {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Collect files based on patterns
+   */
+  private async collectFiles(
+    localDir: string,
+    include?: string[],
+    exclude?: string[]
+  ): Promise<string[]> {
+    const patterns = include && include.length > 0 ? include : ['**/*'];
+    const ignorePatterns = exclude || [];
+
+    let allFiles: string[] = [];
+    for (const pattern of patterns) {
+      const fullPattern = path.join(localDir, pattern);
+      const files = await glob(fullPattern, {
+        nodir: true,
+        ignore: ignorePatterns,
+        absolute: true,
+      });
+      allFiles = allFiles.concat(files);
+    }
+
+    // Remove duplicates
+    return [...new Set(allFiles)];
+  }
+
+  /**
+   * Create progress bar for batch upload
+   */
+  private createProgressBar(): cliProgress.SingleBar {
+    return new cliProgress.SingleBar(
+      {
+        format:
+          'Upload Progress |' +
+          chalk.cyan('{bar}') +
+          '| {percentage}% | {value}/{total} Files | {currentFile}',
+        barCompleteChar: '\u2588',
+        barIncompleteChar: '\u2591',
+        hideCursor: true,
+      },
+      cliProgress.Presets.shades_classic
+    );
   }
 
   /**
@@ -51,7 +134,6 @@ export class OSSUploader {
       verbose = false,
     } = options;
 
-    // Check if source exists
     if (!fs.existsSync(source)) {
       throw new Error(chalk.red(`Source path does not exist: ${source}`));
     }
@@ -102,31 +184,22 @@ export class OSSUploader {
   ): Promise<UploadResult> {
     const fileName = path.basename(localPath);
     const ossPath = remotePath ? path.posix.join(remotePath, fileName) : fileName;
-    const normalizedOssPath = ossPath.replace(/\\/g, '/'); // Ensure forward slashes
+    const normalizedOssPath = this.normalizePath(ossPath);
 
     const spinner = verbose
       ? ora(`Uploading ${chalk.cyan(localPath)} → ${chalk.cyan(normalizedOssPath)}`).start()
       : null;
 
     try {
-      // Check if file exists in OSS
-      if (!overwrite) {
-        try {
-          await this.client.head(normalizedOssPath);
-          // File exists
-          spinner?.fail();
-          return {
-            success: false,
-            localPath,
-            remotePath: normalizedOssPath,
-            error: 'File already exists (use --overwrite to replace)',
-          };
-        } catch (error: any) {
-          // File doesn't exist, continue with upload
-          if (error.code !== 'NoSuchKey') {
-            throw error;
-          }
-        }
+      // Check if file exists in OSS when overwrite is disabled
+      if (!overwrite && (await this.fileExistsInOSS(normalizedOssPath))) {
+        spinner?.fail();
+        return {
+          success: false,
+          localPath,
+          remotePath: normalizedOssPath,
+          error: 'File already exists (use --overwrite to replace)',
+        };
       }
 
       // Upload file
@@ -167,6 +240,69 @@ export class OSSUploader {
   }
 
   /**
+   * Upload a single file in batch upload context (with progress tracking)
+   */
+  private async uploadSingleFileInBatch(
+    file: string,
+    localDir: string,
+    remoteDir: string,
+    overwrite: boolean,
+    verbose: boolean,
+    spinner: Ora | null
+  ): Promise<UploadResult> {
+    const relativePath = path.relative(localDir, file);
+    const remotePath = remoteDir
+      ? this.normalizePath(path.posix.join(remoteDir, relativePath))
+      : this.normalizePath(relativePath);
+
+    try {
+      // Check if file exists in OSS when overwrite is disabled
+      if (!overwrite && (await this.fileExistsInOSS(remotePath))) {
+        spinner?.fail();
+        return {
+          success: false,
+          localPath: file,
+          remotePath,
+          error: 'File already exists',
+        };
+      }
+
+      // Upload file
+      await this.client.put(remotePath, file);
+      const stats = fs.statSync(file);
+
+      spinner?.succeed();
+
+      if (verbose) {
+        console.log(
+          chalk.green(`✓ ${relativePath} → ${remotePath} (${this.formatBytes(stats.size)})`)
+        );
+      }
+
+      return {
+        success: true,
+        localPath: file,
+        remotePath,
+        url: this.generateUrl(remotePath),
+        size: stats.size,
+      };
+    } catch (error: any) {
+      spinner?.fail();
+
+      if (verbose) {
+        console.error(chalk.red(`✗ ${relativePath} - ${error.message}`));
+      }
+
+      return {
+        success: false,
+        localPath: file,
+        remotePath,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
    * Upload a directory recursively
    */
   private async uploadDirectory(
@@ -177,87 +313,52 @@ export class OSSUploader {
     exclude?: string[],
     verbose: boolean = false
   ): Promise<UploadResult[]> {
-    // Build glob pattern
-    const patterns = include && include.length > 0 ? include : ['**/*'];
-    const ignorePatterns = exclude || [];
+    // Collect all files
+    const allFiles = await this.collectFiles(localDir, include, exclude);
+    const totalFiles = allFiles.length;
+
+    console.log(chalk.blue(`Found ${totalFiles} file(s) to upload from ${localDir}\n`));
+
+    if (totalFiles === 0) {
+      return [];
+    }
+
+    // Create progress bar (only in non-verbose mode)
+    const progressBar = verbose ? null : this.createProgressBar();
+    progressBar?.start(totalFiles, 0, { currentFile: '' });
 
     const results: UploadResult[] = [];
+    let uploadedCount = 0;
 
-    for (const pattern of patterns) {
-      const fullPattern = path.join(localDir, pattern);
-      const files = await glob(fullPattern, {
-        nodir: true,
-        ignore: ignorePatterns,
-        absolute: true,
-      });
+    for (const file of allFiles) {
+      const relativePath = path.relative(localDir, file);
+      const truncatedPath = this.truncateFilename(relativePath);
 
-      console.log(chalk.blue(`Found ${files.length} file(s) to upload from ${localDir}`));
+      // Update progress bar with current file
+      progressBar?.update(uploadedCount, { currentFile: truncatedPath });
 
-      for (const file of files) {
-        const relativePath = path.relative(localDir, file);
-        const remotePath = remoteDir
-          ? path.posix.join(remoteDir, relativePath).replace(/\\/g, '/')
-          : relativePath.replace(/\\/g, '/');
+      // Create spinner for verbose mode
+      const spinner = verbose ? ora(`Uploading ${chalk.cyan(relativePath)}`).start() : null;
 
-        const spinner = verbose ? ora(`Uploading ${chalk.cyan(relativePath)}`).start() : null;
+      // Upload single file
+      const result = await this.uploadSingleFileInBatch(
+        file,
+        localDir,
+        remoteDir,
+        overwrite,
+        verbose,
+        spinner
+      );
 
-        try {
-          // Check if file exists in OSS
-          if (!overwrite) {
-            try {
-              await this.client.head(remotePath);
-              // File exists
-              spinner?.fail();
-              results.push({
-                success: false,
-                localPath: file,
-                remotePath,
-                error: 'File already exists',
-              });
-              continue;
-            } catch (error: any) {
-              // File doesn't exist, continue
-              if (error.code !== 'NoSuchKey') {
-                throw error;
-              }
-            }
-          }
+      results.push(result);
+      uploadedCount++;
 
-          // Upload file
-          await this.client.put(remotePath, file);
-          const stats = fs.statSync(file);
-
-          spinner?.succeed();
-
-          if (verbose) {
-            console.log(
-              chalk.green(`✓ ${relativePath} → ${remotePath} (${this.formatBytes(stats.size)})`)
-            );
-          }
-
-          results.push({
-            success: true,
-            localPath: file,
-            remotePath,
-            url: this.generateUrl(remotePath),
-            size: stats.size,
-          });
-        } catch (error: any) {
-          spinner?.fail();
-
-          if (verbose) {
-            console.error(chalk.red(`✗ ${relativePath} - ${error.message}`));
-          }
-
-          results.push({
-            success: false,
-            localPath: file,
-            remotePath,
-            error: error.message,
-          });
-        }
-      }
+      // Update progress bar
+      progressBar?.update(uploadedCount, { currentFile: truncatedPath });
     }
+
+    progressBar?.stop();
+    console.log(); // Add a newline after progress bar
 
     return results;
   }

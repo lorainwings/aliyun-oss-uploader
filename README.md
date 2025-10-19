@@ -154,6 +154,38 @@ oss-uploader upload ./dist -m ./upload-map.json
 oss-uploader upload ./dist --no-mapping
 ```
 
+## 📊 Progress Display
+
+The tool displays real-time progress during uploads with two modes:
+
+### Default Mode (Progress Bar)
+
+For batch uploads, a beautiful progress bar is displayed showing:
+
+- ✅ Upload progress percentage
+- 📈 Completed/Total file count
+- 📄 Current file being uploaded
+
+```
+Upload Progress |████████████████████░░░░░░| 75% | 15/20 Files | src/components/Button.tsx
+```
+
+### Verbose Mode (-v)
+
+Use `-v` or `--verbose` option to see detailed upload information for each file:
+
+```bash
+oss-uploader upload ./dist -v
+```
+
+Sample output:
+
+```
+✓ Uploaded: src/index.js → static/index.js (24.5 KB)
+✓ Uploaded: src/styles.css → static/styles.css (12.3 KB)
+...
+```
+
 ## 🗺️ Upload Mapping File
 
 After each upload, the tool automatically generates a `.oss-uploader-mapping.json` file in the current directory with detailed information about all uploaded files:
