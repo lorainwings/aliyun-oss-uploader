@@ -372,9 +372,85 @@ export class OSSUploader {
   }
 
   /**
-   * Generate upload mapping file
+   * Upload multiple files from different source paths
    */
-  private async generateMappingFile(results: UploadResult[], customPath?: string): Promise<void> {
+  async uploadMultiple(
+    sources: string[],
+    targetDir: string = '',
+    overwrite: boolean = true,
+    verbose: boolean = false
+  ): Promise<UploadResult[]> {
+    console.log(chalk.blue(`Found ${sources.length} source(s) to upload\n`));
+
+    const results: UploadResult[] = [];
+
+    // Create progress bar (only in non-verbose mode)
+    const progressBar = verbose ? null : this.createProgressBar();
+    const totalSources = sources.length;
+    progressBar?.start(totalSources, 0, { currentFile: '' });
+
+    let processedCount = 0;
+
+    for (const source of sources) {
+      const sourcePath = path.resolve(source);
+
+      if (!fs.existsSync(sourcePath)) {
+        console.error(chalk.red(`✗ Source does not exist: ${sourcePath}`));
+        results.push({
+          success: false,
+          localPath: sourcePath,
+          remotePath: '',
+          error: 'Source path does not exist',
+        });
+        processedCount++;
+        progressBar?.update(processedCount, { currentFile: path.basename(sourcePath) });
+        continue;
+      }
+
+      const stats = fs.statSync(sourcePath);
+      const fileName = path.basename(sourcePath);
+
+      progressBar?.update(processedCount, { currentFile: this.truncateFilename(fileName) });
+
+      if (stats.isFile()) {
+        const spinner = verbose ? ora(`Uploading ${chalk.cyan(fileName)}`).start() : null;
+        const result = await this.uploadFile(sourcePath, targetDir, overwrite, verbose);
+        results.push(result);
+        spinner?.stop();
+      } else if (stats.isDirectory()) {
+        console.log(chalk.blue(`\nUploading directory: ${sourcePath}`));
+        const dirResults = await this.uploadDirectory(
+          sourcePath,
+          targetDir,
+          overwrite,
+          undefined, // no include patterns in multi-file mode
+          undefined, // no exclude patterns in multi-file mode
+          verbose
+        );
+        results.push(...dirResults);
+      } else {
+        results.push({
+          success: false,
+          localPath: sourcePath,
+          remotePath: '',
+          error: 'Invalid source type',
+        });
+      }
+
+      processedCount++;
+      progressBar?.update(processedCount, { currentFile: this.truncateFilename(fileName) });
+    }
+
+    progressBar?.stop();
+    console.log(); // Add a newline after progress bar
+
+    return results;
+  }
+
+  /**
+   * Generate upload mapping file (now public for CLI usage)
+   */
+  async generateMappingFile(results: UploadResult[], customPath?: string): Promise<void> {
     const successfulResults = results.filter(r => r.success && r.url);
 
     if (successfulResults.length === 0) {

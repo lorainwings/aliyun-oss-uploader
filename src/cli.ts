@@ -23,8 +23,8 @@ program
 
 // Upload command
 program
-  .command('upload <source>')
-  .description('Upload a file or directory to OSS')
+  .command('upload <sources...>')
+  .description('Upload file(s) or directory to OSS (supports multiple file paths)')
   .option('-t, --target <path>', 'Target path in OSS bucket', '')
   .option('-c, --config <path>', 'Path to configuration file')
   .option('-r, --recursive', 'Upload directory recursively', true)
@@ -38,7 +38,7 @@ program
     'Generate upload mapping file (default: .oss-uploader-mapping.json)'
   )
   .option('--no-mapping', 'Do not generate upload mapping file')
-  .action(async (source: string, options: any) => {
+  .action(async (sources: string[], options: any) => {
     try {
       console.log(chalk.blue('🚀 Starting upload process...\n'));
 
@@ -54,21 +54,38 @@ program
       // Create uploader instance
       const uploader = new OSSUploader(config);
 
-      // Prepare upload options
-      const uploadOptions: UploadOptions = {
-        source: path.resolve(source),
-        target: options.target,
-        recursive: options.recursive,
-        overwrite: options.overwrite,
-        include: options.include,
-        exclude: options.exclude,
-        verbose: options.verbose,
-        generateMapping: options.mapping !== false,
-        mappingFile: typeof options.mapping === 'string' ? options.mapping : undefined,
-      };
+      let results: any[] = [];
 
-      // Upload files
-      const results = await uploader.upload(uploadOptions);
+      if (sources.length === 1 && sources[0]) {
+        // Single source - use original logic (support directory upload with patterns)
+        const uploadOptions: UploadOptions = {
+          source: path.resolve(sources[0]),
+          target: options.target,
+          recursive: options.recursive,
+          overwrite: options.overwrite,
+          include: options.include,
+          exclude: options.exclude,
+          verbose: options.verbose,
+          generateMapping: options.mapping !== false,
+          mappingFile: typeof options.mapping === 'string' ? options.mapping : undefined,
+        };
+        results = await uploader.upload(uploadOptions);
+      } else {
+        // Multiple sources - batch upload multiple files/directories
+        console.log(chalk.blue(`Uploading ${sources.length} source(s)...\n`));
+        results = await uploader.uploadMultiple(
+          sources.map(s => path.resolve(s)),
+          options.target,
+          options.overwrite,
+          options.verbose
+        );
+
+        // Generate mapping file if requested
+        if (options.mapping !== false) {
+          const mappingFile = typeof options.mapping === 'string' ? options.mapping : undefined;
+          await uploader.generateMappingFile(results, mappingFile);
+        }
+      }
 
       // Print summary
       console.log(chalk.blue('\n📊 Upload Summary:'));

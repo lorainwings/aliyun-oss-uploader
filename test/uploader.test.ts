@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OSSUploader } from '../src/uploader';
 import type { OSSConfig } from '../src/types';
 
@@ -314,6 +314,114 @@ describe('OSSUploader', () => {
         const exists = await uploaderAny.fileExistsInOSS('nonexistent.txt');
         expect(exists).toBe(false);
       });
+    });
+  });
+
+  describe('uploadMultiple', () => {
+    let consoleSpy: any;
+
+    beforeEach(() => {
+      // Mock console.log to suppress output
+      consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleSpy.mockRestore();
+    });
+
+    it('should upload multiple files successfully', async () => {
+      // Create temporary test files
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const file1 = path.join(tmpDir, 'test1.txt');
+      const file2 = path.join(tmpDir, 'test2.txt');
+
+      fs.writeFileSync(file1, 'test content 1');
+      fs.writeFileSync(file2, 'test content 2');
+
+      try {
+        const results = await uploader.uploadMultiple([file1, file2], 'uploads', true, false);
+
+        expect(results).toHaveLength(2);
+        expect(results.every(r => r.success)).toBe(true);
+      } finally {
+        // Cleanup
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should handle non-existent files gracefully', async () => {
+      const results = await uploader.uploadMultiple(
+        ['/non/existent/file1.txt', '/non/existent/file2.txt'],
+        '',
+        true,
+        false
+      );
+
+      expect(results).toHaveLength(2);
+      expect(results.every(r => !r.success)).toBe(true);
+      expect(results.every(r => r.error === 'Source path does not exist')).toBe(true);
+    });
+
+    it('should handle mixed valid and invalid sources', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const validFile = path.join(tmpDir, 'valid.txt');
+      fs.writeFileSync(validFile, 'valid content');
+
+      try {
+        const results = await uploader.uploadMultiple(
+          [validFile, '/non/existent/file.txt'],
+          '',
+          true,
+          false
+        );
+
+        expect(results).toHaveLength(2);
+        expect(results[0]?.success).toBe(true);
+        expect(results[1]?.success).toBe(false);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('generateMappingFile', () => {
+    it('should be callable as public method', async () => {
+      const results = [
+        {
+          success: true,
+          localPath: '/test/file.txt',
+          remotePath: 'uploads/file.txt',
+          url: 'https://example.com/uploads/file.txt',
+          size: 1024,
+        },
+      ];
+
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const mappingFile = path.join(tmpDir, 'mapping.json');
+
+      try {
+        await uploader.generateMappingFile(results, mappingFile);
+
+        expect(fs.existsSync(mappingFile)).toBe(true);
+        const content = JSON.parse(fs.readFileSync(mappingFile, 'utf-8'));
+        expect(content.files).toHaveLength(1);
+        expect(content.totalFiles).toBe(1);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
     });
   });
 });

@@ -95,8 +95,8 @@ oss-uploader upload ./dist -t static/
 ### 命令列表
 
 ```bash
-# 上传文件或目录
-oss-uploader upload <source> [options]
+# 上传文件或目录（支持多个文件路径）
+oss-uploader upload <sources...> [options]
 
 # 列出 OSS bucket 中的文件
 oss-uploader list [prefix]
@@ -135,6 +135,12 @@ oss-uploader init [选项]
 # 上传单个文件
 oss-uploader upload ./image.png
 
+# 上传多个文件（批量上传）
+oss-uploader upload ./file1.js ./file2.css ./image.png
+
+# 上传多个文件到指定目录
+oss-uploader upload ./image1.png ./image2.jpg ./logo.svg -t images/2024/
+
 # 上传到指定目录
 oss-uploader upload ./image.png -t images/2024/
 
@@ -152,6 +158,9 @@ oss-uploader upload ./dist -m ./upload-map.json
 
 # 不生成映射文件
 oss-uploader upload ./dist --no-mapping
+
+# 混合上传文件和目录（批量上传）
+oss-uploader upload ./src/file1.js ./src/file2.css ./assets
 ```
 
 ## 📊 进度展示

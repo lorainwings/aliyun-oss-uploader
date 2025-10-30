@@ -95,8 +95,8 @@ oss-uploader upload ./dist -t static/
 ### Commands
 
 ```bash
-# Upload file or directory
-oss-uploader upload <source> [options]
+# Upload file(s) or directory
+oss-uploader upload <sources...> [options]
 
 # List files in OSS bucket
 oss-uploader list [prefix]
@@ -135,6 +135,12 @@ oss-uploader init [options]
 # Upload single file
 oss-uploader upload ./image.png
 
+# Upload multiple files (batch upload)
+oss-uploader upload ./file1.js ./file2.css ./image.png
+
+# Upload multiple files to specific directory
+oss-uploader upload ./image1.png ./image2.jpg ./logo.svg -t images/2024/
+
 # Upload to specific directory
 oss-uploader upload ./image.png -t images/2024/
 
@@ -152,6 +158,9 @@ oss-uploader upload ./dist -m ./upload-map.json
 
 # Don't generate mapping file
 oss-uploader upload ./dist --no-mapping
+
+# Mix files and directories (batch upload)
+oss-uploader upload ./src/file1.js ./src/file2.css ./assets
 ```
 
 ## 📊 Progress Display
