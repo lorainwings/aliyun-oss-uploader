@@ -38,6 +38,8 @@ export interface UploadOptions {
   generateMapping?: boolean;
   /** Custom mapping file path */
   mappingFile?: string;
+  /** Whether to add content hash to filename (default: true) */
+  contentHash?: boolean;
 }
 
 /**

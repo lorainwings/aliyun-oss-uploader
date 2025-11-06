@@ -37,6 +37,7 @@
 - 🎯 **Flexible** - Glob pattern file filtering
 - 📊 **Progress** - Real-time upload progress and statistics
 - 🗺️ **Mapping File** - Auto-generate local-to-OSS URL mapping
+- 🔑 **Content Hash** - Automatic cache with 8-char content hash
 - 🛠️ **Complete** - Upload, list, delete, and more operations
 - 💪 **TypeScript** - Written in TypeScript with full type safety
 - ⚡ **Modern** - Dual format (ESM/CJS) with latest toolchain
@@ -128,6 +129,8 @@ oss-uploader init [options]
 | `-v, --verbose` | Show verbose output |
 | `-m, --mapping [path]` | Generate upload mapping file (default: .oss-uploader-mapping.json) |
 | `--no-mapping` | Do not generate upload mapping file |
+| `-h, --content-hash` | Add content hash to filename (default: true) |
+| `--no-content-hash` | Do not add content hash to filename |
 
 ### Examples
 
@@ -158,6 +161,14 @@ oss-uploader upload ./dist -m ./upload-map.json
 
 # Don't generate mapping file
 oss-uploader upload ./dist --no-mapping
+
+# Upload with content hash (default behavior)
+oss-uploader upload ./dist
+# Result: file.js → file.a1b2c3d4.js
+
+# Upload without content hash
+oss-uploader upload ./dist --no-content-hash
+# Result: file.js → file.js
 
 # Mix files and directories (batch upload)
 oss-uploader upload ./src/file1.js ./src/file2.css ./assets
@@ -194,6 +205,67 @@ Sample output:
 ✓ Uploaded: src/styles.css → static/styles.css (12.3 KB)
 ...
 ```
+
+## 🔐 Content Hash Feature
+
+By default, the uploader adds an 8-character content hash to filenames (similar to webpack's chunkhash), providing cache-busting capabilities for your assets.
+
+### How It Works
+
+The tool generates an MD5 hash from the file content and appends the first 8 characters before the file extension:
+
+```
+Original:  app.js
+Uploaded:  app.a1b2c3d4.js
+
+Original:  style.min.css
+Uploaded:  style.min.e5f6g7h8.css
+```
+
+### Benefits
+
+- ✅ **Cache Busting** - Automatically invalidate browser cache when file content changes
+- 🔄 **Version Control** - Same content always generates the same hash
+- 🚀 **CDN Friendly** - Perfect for CDN cache management
+- 📦 **Build Pipeline** - Works seamlessly with modern build tools
+
+### Usage
+
+```bash
+# Default: Content hash enabled
+oss-uploader upload ./dist
+# app.js → app.a1b2c3d4.js
+
+# Disable content hash
+oss-uploader upload ./dist --no-content-hash
+# app.js → app.js
+
+# With programmatic API
+import { OSSUploader } from '@atomfe/oss-uploader';
+
+const uploader = new OSSUploader(config);
+
+// With content hash (default)
+await uploader.upload({
+  source: './dist',
+  target: 'static/',
+  contentHash: true  // default
+});
+
+// Without content hash
+await uploader.upload({
+  source: './dist',
+  target: 'static/',
+  contentHash: false
+});
+```
+
+### Use Cases
+
+- 🌐 **Static Site Deployment** - Ensure visitors get the latest version
+- 📱 **SPA Applications** - Reliable asset updates for single-page apps
+- 🔧 **Microservices** - Consistent versioning across services
+- 📦 **Library Distribution** - Track different versions of published assets
 
 ## 🗺️ Upload Mapping File
 

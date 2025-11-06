@@ -237,6 +237,86 @@ describe('OSSUploader', () => {
       });
     });
 
+    describe('generateContentHash', () => {
+      it('should generate 8-character hash from file content', async () => {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+        const testFile = path.join(tmpDir, 'test.txt');
+        fs.writeFileSync(testFile, 'test content');
+
+        try {
+          const hash = uploaderAny.generateContentHash(testFile);
+          expect(hash).toHaveLength(8);
+          expect(hash).toMatch(/^[a-f0-9]{8}$/);
+        } finally {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      });
+
+      it('should generate consistent hash for same content', async () => {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+        const testFile = path.join(tmpDir, 'test.txt');
+        fs.writeFileSync(testFile, 'same content');
+
+        try {
+          const hash1 = uploaderAny.generateContentHash(testFile);
+          const hash2 = uploaderAny.generateContentHash(testFile);
+          expect(hash1).toBe(hash2);
+        } finally {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      });
+
+      it('should generate different hash for different content', async () => {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+        const testFile1 = path.join(tmpDir, 'test1.txt');
+        const testFile2 = path.join(tmpDir, 'test2.txt');
+        fs.writeFileSync(testFile1, 'content 1');
+        fs.writeFileSync(testFile2, 'content 2');
+
+        try {
+          const hash1 = uploaderAny.generateContentHash(testFile1);
+          const hash2 = uploaderAny.generateContentHash(testFile2);
+          expect(hash1).not.toBe(hash2);
+        } finally {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      });
+    });
+
+    describe('addHashToFilename', () => {
+      it('should add hash before file extension', () => {
+        const result = uploaderAny.addHashToFilename('file.js', 'a1b2c3d4');
+        expect(result).toBe('file.a1b2c3d4.js');
+      });
+
+      it('should handle files without extension', () => {
+        const result = uploaderAny.addHashToFilename('README', 'a1b2c3d4');
+        expect(result).toBe('README.a1b2c3d4');
+      });
+
+      it('should handle files with multiple dots', () => {
+        const result = uploaderAny.addHashToFilename('file.min.js', 'a1b2c3d4');
+        expect(result).toBe('file.min.a1b2c3d4.js');
+      });
+
+      it('should handle dotfiles', () => {
+        const result = uploaderAny.addHashToFilename('.gitignore', 'a1b2c3d4');
+        expect(result).toBe('.gitignore.a1b2c3d4');
+      });
+    });
+
     describe('generateUrl', () => {
       it('should generate HTTPS URL by default', () => {
         const url = uploaderAny.generateUrl('test/file.txt');
@@ -419,6 +499,207 @@ describe('OSSUploader', () => {
         const content = JSON.parse(fs.readFileSync(mappingFile, 'utf-8'));
         expect(content.files).toHaveLength(1);
         expect(content.totalFiles).toBe(1);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('Content Hash Integration', () => {
+    let consoleSpy: any;
+
+    beforeEach(() => {
+      consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleSpy.mockRestore();
+    });
+
+    it('should add content hash to filename when contentHash is true', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const testFile = path.join(tmpDir, 'test.js');
+      fs.writeFileSync(testFile, 'console.log("test");');
+
+      try {
+        const result = await uploader.upload({
+          source: testFile,
+          target: '',
+          contentHash: true,
+          verbose: false,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0]?.success).toBe(true);
+        expect(result[0]?.remotePath).toMatch(/^test\.[a-f0-9]{8}\.js$/);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should not add content hash to filename when contentHash is false', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const testFile = path.join(tmpDir, 'test.js');
+      fs.writeFileSync(testFile, 'console.log("test");');
+
+      try {
+        const result = await uploader.upload({
+          source: testFile,
+          target: '',
+          contentHash: false,
+          verbose: false,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0]?.success).toBe(true);
+        expect(result[0]?.remotePath).toBe('test.js');
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should add content hash by default when contentHash option is not specified', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const testFile = path.join(tmpDir, 'app.css');
+      fs.writeFileSync(testFile, 'body { margin: 0; }');
+
+      try {
+        const result = await uploader.upload({
+          source: testFile,
+          target: 'styles',
+          verbose: false,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0]?.success).toBe(true);
+        expect(result[0]?.remotePath).toMatch(/^styles\/app\.[a-f0-9]{8}\.css$/);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should add content hash to all files in directory upload', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const file1 = path.join(tmpDir, 'file1.js');
+      const file2 = path.join(tmpDir, 'file2.css');
+      fs.writeFileSync(file1, 'console.log("file1");');
+      fs.writeFileSync(file2, 'body { color: red; }');
+
+      try {
+        const results = await uploader.upload({
+          source: tmpDir,
+          target: 'dist',
+          recursive: true,
+          contentHash: true,
+          verbose: false,
+        });
+
+        expect(results).toHaveLength(2);
+        expect(results.every(r => r.success)).toBe(true);
+
+        // Find results by local path (order may vary)
+        const jsResult = results.find(r => r.localPath === file1);
+        const cssResult = results.find(r => r.localPath === file2);
+
+        expect(jsResult?.remotePath).toMatch(/^dist\/file1\.[a-f0-9]{8}\.js$/);
+        expect(cssResult?.remotePath).toMatch(/^dist\/file2\.[a-f0-9]{8}\.css$/);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should preserve directory structure with content hash', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const subDir = path.join(tmpDir, 'assets');
+      fs.mkdirSync(subDir);
+      const file1 = path.join(tmpDir, 'index.html');
+      const file2 = path.join(subDir, 'style.css');
+      fs.writeFileSync(file1, '<html></html>');
+      fs.writeFileSync(file2, 'body {}');
+
+      try {
+        const results = await uploader.upload({
+          source: tmpDir,
+          target: '',
+          recursive: true,
+          contentHash: true,
+          verbose: false,
+        });
+
+        expect(results).toHaveLength(2);
+        expect(results.every(r => r.success)).toBe(true);
+
+        const indexResult = results.find(r => r.localPath === file1);
+        const styleResult = results.find(r => r.localPath === file2);
+
+        expect(indexResult?.remotePath).toMatch(/^index\.[a-f0-9]{8}\.html$/);
+        expect(styleResult?.remotePath).toMatch(/^assets\/style\.[a-f0-9]{8}\.css$/);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should work with uploadMultiple and contentHash enabled', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const file1 = path.join(tmpDir, 'main.js');
+      const file2 = path.join(tmpDir, 'vendor.js');
+      fs.writeFileSync(file1, 'function main() {}');
+      fs.writeFileSync(file2, 'function vendor() {}');
+
+      try {
+        const results = await uploader.uploadMultiple([file1, file2], 'js', true, false, true);
+
+        expect(results).toHaveLength(2);
+        expect(results.every(r => r.success)).toBe(true);
+        expect(results[0]?.remotePath).toMatch(/^js\/main\.[a-f0-9]{8}\.js$/);
+        expect(results[1]?.remotePath).toMatch(/^js\/vendor\.[a-f0-9]{8}\.js$/);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should work with uploadMultiple and contentHash disabled', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oss-test-'));
+      const file1 = path.join(tmpDir, 'data.json');
+      const file2 = path.join(tmpDir, 'config.xml');
+      fs.writeFileSync(file1, '{"key": "value"}');
+      fs.writeFileSync(file2, '<config></config>');
+
+      try {
+        const results = await uploader.uploadMultiple([file1, file2], '', true, false, false);
+
+        expect(results).toHaveLength(2);
+        expect(results.every(r => r.success)).toBe(true);
+        expect(results[0]?.remotePath).toBe('data.json');
+        expect(results[1]?.remotePath).toBe('config.xml');
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }

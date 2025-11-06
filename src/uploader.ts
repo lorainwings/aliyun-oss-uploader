@@ -2,6 +2,7 @@ import OSS from 'ali-oss';
 import { type OSSConfig, type UploadOptions, type UploadResult, type UploadMapping } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { glob } from 'glob';
 import chalk from 'chalk';
 import ora, { type Ora } from 'ora';
@@ -10,6 +11,7 @@ import cliProgress from 'cli-progress';
 // Constants
 const MAX_FILENAME_DISPLAY_LENGTH = 40;
 const DEFAULT_TIMEOUT = 60000;
+const CONTENT_HASH_LENGTH = 8;
 
 /**
  * OSS Uploader class
@@ -55,6 +57,26 @@ export class OSSUploader {
    */
   private normalizePath(filePath: string): string {
     return filePath.replace(/\\/g, '/');
+  }
+
+  /**
+   * Generate content hash from file content
+   * Similar to webpack's chunkhash
+   */
+  private generateContentHash(filePath: string): string {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+    return hash.substring(0, CONTENT_HASH_LENGTH);
+  }
+
+  /**
+   * Add content hash to filename
+   * Example: file.js -> file.a1b2c3d4.js
+   */
+  private addHashToFilename(filename: string, hash: string): string {
+    const ext = path.extname(filename);
+    const basename = path.basename(filename, ext);
+    return `${basename}.${hash}${ext}`;
   }
 
   /**
@@ -140,6 +162,7 @@ export class OSSUploader {
       include,
       exclude,
       verbose = false,
+      contentHash = true,
     } = options;
 
     if (!fs.existsSync(source)) {
@@ -151,7 +174,7 @@ export class OSSUploader {
 
     if (stats.isFile()) {
       // Upload single file
-      const result = await this.uploadFile(source, target, overwrite, verbose);
+      const result = await this.uploadFile(source, target, overwrite, verbose, contentHash);
       results.push(result);
     } else if (stats.isDirectory()) {
       // Upload directory
@@ -166,7 +189,8 @@ export class OSSUploader {
         overwrite,
         include,
         exclude,
-        verbose
+        verbose,
+        contentHash
       );
       results.push(...dirResults);
     } else {
@@ -188,9 +212,17 @@ export class OSSUploader {
     localPath: string,
     remotePath: string,
     overwrite: boolean = true,
-    verbose: boolean = false
+    verbose: boolean = false,
+    contentHash: boolean = true
   ): Promise<UploadResult> {
-    const fileName = path.basename(localPath);
+    let fileName = path.basename(localPath);
+
+    // Add content hash to filename if enabled
+    if (contentHash) {
+      const hash = this.generateContentHash(localPath);
+      fileName = this.addHashToFilename(fileName, hash);
+    }
+
     const ossPath = remotePath ? path.posix.join(remotePath, fileName) : fileName;
     const normalizedOssPath = this.normalizePath(ossPath);
 
@@ -256,12 +288,24 @@ export class OSSUploader {
     remoteDir: string,
     overwrite: boolean,
     verbose: boolean,
-    spinner: Ora | null
+    spinner: Ora | null,
+    contentHash: boolean = true
   ): Promise<UploadResult> {
     const relativePath = path.relative(localDir, file);
+    let processedRelativePath = relativePath;
+
+    // Add content hash to filename if enabled
+    if (contentHash) {
+      const hash = this.generateContentHash(file);
+      const dir = path.dirname(relativePath);
+      const fileName = path.basename(relativePath);
+      const hashedFileName = this.addHashToFilename(fileName, hash);
+      processedRelativePath = dir === '.' ? hashedFileName : path.join(dir, hashedFileName);
+    }
+
     const remotePath = remoteDir
-      ? this.normalizePath(path.posix.join(remoteDir, relativePath))
-      : this.normalizePath(relativePath);
+      ? this.normalizePath(path.posix.join(remoteDir, processedRelativePath))
+      : this.normalizePath(processedRelativePath);
 
     try {
       // Check if file exists in OSS when overwrite is disabled
@@ -319,7 +363,8 @@ export class OSSUploader {
     overwrite: boolean = true,
     include?: string[],
     exclude?: string[],
-    verbose: boolean = false
+    verbose: boolean = false,
+    contentHash: boolean = true
   ): Promise<UploadResult[]> {
     // Collect all files
     const allFiles = await this.collectFiles(localDir, include, exclude);
@@ -355,7 +400,8 @@ export class OSSUploader {
         remoteDir,
         overwrite,
         verbose,
-        spinner
+        spinner,
+        contentHash
       );
 
       results.push(result);
@@ -378,7 +424,8 @@ export class OSSUploader {
     sources: string[],
     targetDir: string = '',
     overwrite: boolean = true,
-    verbose: boolean = false
+    verbose: boolean = false,
+    contentHash: boolean = true
   ): Promise<UploadResult[]> {
     console.log(chalk.blue(`Found ${sources.length} source(s) to upload\n`));
 
@@ -414,7 +461,13 @@ export class OSSUploader {
 
       if (stats.isFile()) {
         const spinner = verbose ? ora(`Uploading ${chalk.cyan(fileName)}`).start() : null;
-        const result = await this.uploadFile(sourcePath, targetDir, overwrite, verbose);
+        const result = await this.uploadFile(
+          sourcePath,
+          targetDir,
+          overwrite,
+          verbose,
+          contentHash
+        );
         results.push(result);
         spinner?.stop();
       } else if (stats.isDirectory()) {
@@ -425,7 +478,8 @@ export class OSSUploader {
           overwrite,
           undefined, // no include patterns in multi-file mode
           undefined, // no exclude patterns in multi-file mode
-          verbose
+          verbose,
+          contentHash
         );
         results.push(...dirResults);
       } else {

@@ -38,6 +38,8 @@ program
     'Generate upload mapping file (default: .oss-uploader-mapping.json)'
   )
   .option('--no-mapping', 'Do not generate upload mapping file')
+  .option('-h, --content-hash', 'Add content hash to filename (default: true)', true)
+  .option('--no-content-hash', 'Do not add content hash to filename')
   .action(async (sources: string[], options: any) => {
     try {
       console.log(chalk.blue('🚀 Starting upload process...\n'));
@@ -68,6 +70,7 @@ program
           verbose: options.verbose,
           generateMapping: options.mapping !== false,
           mappingFile: typeof options.mapping === 'string' ? options.mapping : undefined,
+          contentHash: options.contentHash !== false,
         };
         results = await uploader.upload(uploadOptions);
       } else {
@@ -77,7 +80,8 @@ program
           sources.map(s => path.resolve(s)),
           options.target,
           options.overwrite,
-          options.verbose
+          options.verbose,
+          options.contentHash !== false
         );
 
         // Generate mapping file if requested
