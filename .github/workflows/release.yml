@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup pnpm
@@ -55,11 +55,8 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm run release
+          publish: npm publish --provenance --access public
           commit: 'chore: release package'
           title: 'chore: release package'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN_LORAIN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_LORAIN }}
-          NPM_CONFIG_PROVENANCE: true
