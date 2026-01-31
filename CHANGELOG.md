@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+### Minor Changes
+
+- Add interactive directory browsing and list directories feature
+  - Add `listDirectories` method to list OSS directories with delimiter
+  - Add `browse` command for interactive directory navigation (select, go back, exit)
+  - Add `-d/--dirs` option to `list` command for showing directories and files at current level
+
 ## 1.1.3
 
 ### Patch Changes
