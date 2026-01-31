@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { select } from '@inquirer/prompts';
 import { loadConfig, createSampleConfig } from './config';
 import { OSSUploader } from './uploader';
 import { type UploadOptions } from './types';
@@ -125,29 +126,57 @@ program
 // List command
 program
   .command('list [prefix]')
-  .description('List files in OSS bucket')
+  .description('List files and directories in OSS bucket')
   .option('-c, --config <path>', 'Path to configuration file')
   .option('-m, --max-keys <number>', 'Maximum number of files to list', '1000')
+  .option('-d, --dirs', 'Show directories only (useful for choosing upload target)', false)
   .action(async (prefix: string | undefined, options: any) => {
     try {
       // Load configuration
       const config = await loadConfig(options.config);
       const uploader = new OSSUploader(config);
 
-      console.log(chalk.blue(`📂 Listing files in bucket: ${config.bucket}\n`));
+      const displayPrefix = prefix || '/';
+      console.log(chalk.blue(`📂 Listing in bucket: ${config.bucket}/${displayPrefix}\n`));
 
-      const files = await uploader.listFiles(prefix, parseInt(options.maxKeys));
+      if (options.dirs) {
+        // Show directories and files at current level
+        const { directories, files } = await uploader.listDirectories(prefix);
 
-      if (files.length === 0) {
-        console.log(chalk.yellow('No files found.'));
-        return;
+        if (directories.length === 0 && files.length === 0) {
+          console.log(chalk.yellow('No directories or files found.'));
+          return;
+        }
+
+        if (directories.length > 0) {
+          console.log(chalk.green(`Directories (${directories.length}):\n`));
+          directories.forEach(dir => {
+            console.log(`  ${chalk.cyan('📁 ' + dir)}`);
+          });
+        }
+
+        if (files.length > 0) {
+          console.log(chalk.green(`\nFiles (${files.length}):\n`));
+          files.forEach(file => {
+            const size = formatBytes(file.size);
+            console.log(`  ${chalk.white('📄 ' + file.name)} ${chalk.gray(`(${size})`)}`);
+          });
+        }
+      } else {
+        // Original behavior: list all files recursively
+        const files = await uploader.listFiles(prefix, parseInt(options.maxKeys));
+
+        if (files.length === 0) {
+          console.log(chalk.yellow('No files found.'));
+          return;
+        }
+
+        console.log(chalk.green(`Found ${files.length} file(s):\n`));
+        files.forEach(file => {
+          const size = formatBytes(file.size);
+          console.log(`  ${chalk.cyan(file.name)} ${chalk.gray(`(${size})`)}`);
+        });
       }
-
-      console.log(chalk.green(`Found ${files.length} file(s):\n`));
-      files.forEach(file => {
-        const size = formatBytes(file.size);
-        console.log(`  ${chalk.cyan(file.name)} ${chalk.gray(`(${size})`)}`);
-      });
     } catch (error: any) {
       console.error(chalk.red(`\n❌ Error: ${error.message}`));
       process.exit(1);
@@ -225,6 +254,117 @@ function formatBytes(bytes: number): string {
 
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
+
+// Interactive browse function
+async function browseOSS(
+  uploader: OSSUploader,
+  bucket: string,
+  startPrefix: string = ''
+): Promise<string | null> {
+  let currentPrefix = startPrefix;
+
+  while (true) {
+    const { directories, files } = await uploader.listDirectories(currentPrefix);
+
+    const choices: { name: string; value: string }[] = [];
+
+    // Add "select current directory" option
+    choices.push({
+      name: chalk.green(`✓ Select current directory: ${currentPrefix || '/'}`),
+      value: '__SELECT__',
+    });
+
+    // Add "go back" option if not at root
+    if (currentPrefix) {
+      choices.push({
+        name: chalk.yellow('⬆ .. (Go back)'),
+        value: '__BACK__',
+      });
+    }
+
+    // Add "exit" option
+    choices.push({
+      name: chalk.red('✗ Exit'),
+      value: '__EXIT__',
+    });
+
+    // Add directories
+    for (const dir of directories) {
+      const displayName = dir.replace(currentPrefix, '');
+      choices.push({
+        name: chalk.cyan(`📁 ${displayName}`),
+        value: dir,
+      });
+    }
+
+    // Add files (for display only)
+    for (const file of files.slice(0, 10)) {
+      const displayName = file.name.replace(currentPrefix, '');
+      const size = formatBytes(file.size);
+      choices.push({
+        name: chalk.gray(`   📄 ${displayName} (${size})`),
+        value: '__FILE__',
+      });
+    }
+
+    if (files.length > 10) {
+      choices.push({
+        name: chalk.gray(`   ... and ${files.length - 10} more files`),
+        value: '__FILE__',
+      });
+    }
+
+    console.log(chalk.blue(`\n📂 Browsing: ${bucket}/${currentPrefix || ''}\n`));
+
+    const answer = await select({
+      message: 'Select a directory:',
+      choices,
+      pageSize: 15,
+    });
+
+    if (answer === '__SELECT__') {
+      return currentPrefix;
+    } else if (answer === '__EXIT__') {
+      return null;
+    } else if (answer === '__BACK__') {
+      // Go to parent directory
+      const parts = currentPrefix.replace(/\/$/, '').split('/');
+      parts.pop();
+      currentPrefix = parts.length > 0 ? parts.join('/') + '/' : '';
+    } else if (answer === '__FILE__') {
+      // Ignore file selection
+      console.log(chalk.yellow('Files cannot be selected as upload target.'));
+    } else {
+      // Enter selected directory
+      currentPrefix = answer;
+    }
+  }
+}
+
+// Browse command
+program
+  .command('browse [prefix]')
+  .description('Interactively browse OSS directories')
+  .option('-c, --config <path>', 'Path to configuration file')
+  .action(async (prefix: string | undefined, options: any) => {
+    try {
+      const config = await loadConfig(options.config);
+      const uploader = new OSSUploader(config);
+
+      const selectedPath = await browseOSS(uploader, config.bucket, prefix || '');
+
+      if (selectedPath !== null) {
+        console.log(chalk.green(`\n✓ Selected path: ${selectedPath || '/'}`));
+        console.log(chalk.gray(`\nUse this path with upload command:`));
+        console.log(chalk.cyan(`  oss-uploader upload <source> -t "${selectedPath}"`));
+      } else {
+        console.log(chalk.yellow('\nBrowsing cancelled.'));
+      }
+    } catch (error: any) {
+      console.error(chalk.red(`\n❌ Error: ${error.message}`));
+      process.exit(1);
+    }
+  });
 
 // Parse arguments
 program.parse(process.argv);

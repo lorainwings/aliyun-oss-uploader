@@ -8,7 +8,7 @@ vi.mock('ali-oss', () => {
     default: vi.fn().mockImplementation(() => ({
       put: vi.fn().mockResolvedValue({ name: 'test.txt', url: 'http://example.com/test.txt' }),
       head: vi.fn().mockRejectedValue({ code: 'NoSuchKey' }),
-      list: vi.fn().mockResolvedValue({ objects: [] }),
+      list: vi.fn().mockResolvedValue({ objects: [], prefixes: [] }),
       delete: vi.fn().mockResolvedValue({}),
       getBucketInfo: vi.fn().mockResolvedValue({ bucket: { name: 'test-bucket' } }),
     })),
@@ -117,6 +117,54 @@ describe('OSSUploader', () => {
     it('should list files with prefix and maxKeys', async () => {
       const files = await uploader.listFiles('images/', 100);
       expect(Array.isArray(files)).toBe(true);
+    });
+  });
+
+  describe('listDirectories', () => {
+    it('should list directories from OSS bucket', async () => {
+      const result = await uploader.listDirectories();
+      expect(result).toHaveProperty('directories');
+      expect(result).toHaveProperty('files');
+      expect(Array.isArray(result.directories)).toBe(true);
+      expect(Array.isArray(result.files)).toBe(true);
+    });
+
+    it('should list directories with prefix', async () => {
+      const result = await uploader.listDirectories('prd/');
+      expect(result).toHaveProperty('directories');
+      expect(result).toHaveProperty('files');
+    });
+
+    it('should return directories and files separately', async () => {
+      const uploaderAny: any = uploader;
+      vi.mocked(uploaderAny.client.list).mockResolvedValueOnce({
+        objects: [
+          { name: 'prd/', size: 0 },
+          { name: 'prd/file1.txt', size: 100 },
+          { name: 'prd/file2.txt', size: 200 },
+        ],
+        prefixes: ['prd/subdir1/', 'prd/subdir2/'],
+      });
+
+      const result = await uploader.listDirectories('prd/');
+      expect(result.directories).toEqual(['prd/subdir1/', 'prd/subdir2/']);
+      // Should filter out the prefix itself (prd/)
+      expect(result.files).toHaveLength(2);
+    });
+
+    it('should filter out prefix from files', async () => {
+      const uploaderAny: any = uploader;
+      vi.mocked(uploaderAny.client.list).mockResolvedValueOnce({
+        objects: [
+          { name: 'test/', size: 0 },
+          { name: 'test/file.txt', size: 100 },
+        ],
+        prefixes: [],
+      });
+
+      const result = await uploader.listDirectories('test/');
+      expect(result.files.some(f => f.name === 'test/')).toBe(false);
+      expect(result.files).toHaveLength(1);
     });
   });
 

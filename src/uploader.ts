@@ -558,6 +558,28 @@ export class OSSUploader {
   }
 
   /**
+   * List directories in OSS bucket (using delimiter)
+   */
+  async listDirectories(
+    prefix?: string
+  ): Promise<{ directories: string[]; files: OSS.ObjectMeta[] }> {
+    try {
+      const result = await this.client.list({
+        prefix: prefix || '',
+        delimiter: '/',
+        'max-keys': 1000,
+      });
+
+      const directories = result.prefixes || [];
+      const files = (result.objects || []).filter(obj => obj.name !== prefix);
+
+      return { directories, files };
+    } catch (error: any) {
+      throw new Error(chalk.red(`Failed to list directories: ${error.message}`));
+    }
+  }
+
+  /**
    * Delete a file from OSS
    */
   async deleteFile(ossPath: string): Promise<void> {
